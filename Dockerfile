@@ -6,18 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY runtime.zip /tmp/runtime.zip
 
-RUN python - <<'PY'
-import pathlib, zipfile
-src = pathlib.Path('/tmp/runtime.zip')
-with zipfile.ZipFile(src) as zf:
-    members = zf.infolist()
-    for m in members:
-        p = pathlib.PurePosixPath(m.filename)
-        if p.is_absolute() or '..' in p.parts:
-            raise RuntimeError('unsafe archive path')
-    zf.extractall('/app')
-PY
-
+RUN python -c "import zipfile,pathlib; z=zipfile.ZipFile('/tmp/runtime.zip'); ms=z.infolist(); assert all((not pathlib.PurePosixPath(m.filename).is_absolute()) and ('..' not in pathlib.PurePosixPath(m.filename).parts) for m in ms); z.extractall('/app')"
 RUN pip install --disable-pip-version-check --no-cache-dir -r /app/requirements.txt
 RUN mkdir -p /data/uploads /data/logs /data/backups
 
