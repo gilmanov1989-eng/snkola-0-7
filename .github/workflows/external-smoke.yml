@@ -1,0 +1,28 @@
+name: external-production-smoke
+
+on:
+  push:
+    branches:
+      - marketplace-owner-prod
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify public production URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://worker-production-2ad6.up.railway.app"
+          health_code="$(curl --fail-with-body -sS --retry 4 --retry-delay 2 -o /tmp/health.json -w '%{http_code}' "$BASE/health")"
+          test "$health_code" = "200"
+          grep -q '"ok":true' /tmp/health.json
+          root_code="$(curl --fail-with-body -sS --retry 4 --retry-delay 2 -o /tmp/root.html -w '%{http_code}' "$BASE/")"
+          test "$root_code" = "200"
+          grep -q 'ИИ-система владельца бизнеса' /tmp/root.html
+          grep -q 'id="loginForm"' /tmp/root.html
+          if grep -q 'Directory listing' /tmp/root.html; then exit 10; fi
+          if grep -q 'Application failed to respond' /tmp/root.html; then exit 11; fi
+          echo "EXTERNAL_SMOKE_OK health=$health_code root=$root_code"
