@@ -1,0 +1,42 @@
+name: Verify public lesson
+on:
+  push:
+    branches: [gh-pages]
+    paths: ['.github/workflows/verify-lesson.yml', 'lessons/urok-1.html']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify HTTPS response and published content
+        run: |
+          python3 - <<'PY'
+          import urllib.request, hashlib, time, os, json
+          url = 'https://gilmanov1989-eng.github.io/snkola-0-7/lessons/urok-1.html'
+          expected = '59c86fefd4fb91a0204dadb19b53d2a0b2e7bc6d'
+          for attempt in range(20):
+              try:
+                  req = urllib.request.Request(url, headers={'User-Agent':'Lesson-public-availability-check/1.0', 'Cache-Control':'no-cache'})
+                  with urllib.request.urlopen(req, timeout=15) as r:
+                      data = r.read()
+                      mime = r.headers.get('Content-Type','')
+                      status = r.status
+                      final_url = r.url
+                  digest = hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+                  assert status == 200, status
+                  assert 'text/html' in mime, mime
+                  assert digest == expected, (len(data),digest)
+                  assert data.rstrip().endswith(b'</html>'), 'Incomplete HTML'
+                  result = {'status':status,'url':url,'final_url':final_url,'bytes':len(data),'content_type':mime,'git_blob_sha':digest,'authentication_required':False}
+                  print(json.dumps(result,ensure_ascii=False,indent=2))
+                  with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+                      f.write('Public lesson verified: HTTP 200, complete HTML (66,071 bytes), no sign-in or confirmation page.\n\n'+url+'\n')
+                  break
+              except Exception as e:
+                  print('Attempt',attempt+1,str(e),flush=True)
+                  if attempt == 19: raise
+                  time.sleep(3)
+          PY
